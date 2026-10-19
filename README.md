@@ -30,7 +30,7 @@ octodns-views==0.1.0
 
 ```
 -e git+https://git@github.com/octodns/octodns.git@94bc80eb03f662565940dd2d4af5c20ccd61915e#egg=octodns
--e git+https://git@github.com/DonQuinleone/octodns-views.git@0000000000000000000000000000000000000000#egg=octodns_views
+-e git+https://git@github.com/DonQuinleone/octodns-views.git@2eced80d69eac9cfe82b46d8ab3355f4ceb52131#egg=octodns_views
 ```
 
 ### Configuration
