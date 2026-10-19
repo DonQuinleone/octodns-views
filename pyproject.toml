@@ -37,11 +37,15 @@ Issues = "https://github.com/DonQuinleone/octodns-views/issues"
 
 [project.optional-dependencies]
 test = [
+    "octodns-katapult",
+    "octodns-powerdns",
     "pytest",
     "pytest-cov",
     "pytest-network",
 ]
 dev = [
+    "octodns-katapult",
+    "octodns-powerdns",
     "pytest",
     "pytest-cov",
     "pytest-network",
