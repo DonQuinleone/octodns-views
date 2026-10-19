@@ -48,6 +48,14 @@ jobs:
             echo "dist-version=$dist_version"
             echo "prerelease=$prerelease"
           } >> "$GITHUB_OUTPUT"
+      - name: Check the changelog has a section for the version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if ! grep -q "^## $VERSION " CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no section for $VERSION; run changelet bump before tagging"
+            exit 1
+          fi
       - name: Lint, format and coverage
         run: ./script/cibuild
       - name: Build the package and test the installed wheel
