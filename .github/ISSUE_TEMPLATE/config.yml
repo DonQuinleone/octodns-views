@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/DonQuinleone/octodns-views/security/advisories/new
+    about: Report it privately, not as an issue.
+  - name: Problem with octoDNS itself
+    url: https://github.com/octodns/octodns/issues
+    about: For octoDNS core or another provider, report it to that project.

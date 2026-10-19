@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+'''
+Rewrites the version and commit pins in README.md after a stable release.
+
+    ./script/update-readme-pins --octodns-version 1.22.0 \
+        --octodns-sha <40 hex> --version 1.0.0 --sha <40 hex>
+'''
+
+import re
+from argparse import ArgumentParser, ArgumentTypeError
+from collections import namedtuple
+from sys import argv
+
+Pins = namedtuple('Pins', 'octodns_version octodns_sha version sha')
+
+# Replacements are functions so re never reads backslashes in them as escapes
+PIN_PATTERNS = (
+    (
+        'octodns version',
+        re.compile(r'^octodns==\S+$', re.MULTILINE),
+        lambda pins, match: f'octodns=={pins.octodns_version}',
+    ),
+    (
+        'octodns-views version',
+        re.compile(r'^octodns-views==\S+$', re.MULTILINE),
+        lambda pins, match: f'octodns-views=={pins.version}',
+    ),
+    (
+        'octodns commit',
+        re.compile(r'(octodns/octodns\.git@)[0-9a-f]{40}'),
+        lambda pins, match: match.group(1) + pins.octodns_sha,
+    ),
+    (
+        'octodns-views commit',
+        re.compile(r'(/octodns-views\.git@)[0-9a-f]{40}'),
+        lambda pins, match: match.group(1) + pins.sha,
+    ),
+)
+
+
+class PinNotFound(Exception):
+    pass
+
+
+def apply(readme, pins):
+    for name, pattern, replacement in PIN_PATTERNS:
+        readme, count = pattern.subn(
+            lambda match: replacement(pins, match), readme
+        )
+        if not count:
+            raise PinNotFound(f'README.md has no {name} pin to update')
+    return readme
+
+
+def version(value):
+    if not re.fullmatch(r'[0-9][0-9A-Za-z.+-]*', value):
+        raise ArgumentTypeError(f'"{value}" is not a version number')
+    return value
+
+
+def commit_sha(value):
+    if not re.fullmatch(r'[0-9a-f]{40}', value):
+        raise ArgumentTypeError(f'"{value}" is not a full 40-character SHA')
+    return value
+
+
+def main(args):
+    parser = ArgumentParser(description='Update the README pins.')
+    parser.add_argument('--readme', default='README.md')
+    parser.add_argument('--octodns-version', required=True, type=version)
+    parser.add_argument('--octodns-sha', required=True, type=commit_sha)
+    parser.add_argument('--version', required=True, type=version)
+    parser.add_argument('--sha', required=True, type=commit_sha)
+    options = parser.parse_args(args)
+    pins = Pins(
+        options.octodns_version,
+        options.octodns_sha,
+        options.version,
+        options.sha,
+    )
+    with open(options.readme) as fh:
+        readme = fh.read()
+    with open(options.readme, 'w') as fh:
+        fh.write(apply(readme, pins))
+
+
+if __name__ == '__main__':
+    main(argv[1:])

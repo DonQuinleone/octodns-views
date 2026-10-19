@@ -1,0 +1,63 @@
+name: Bug report
+description: Something in octodns-views doesn't work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Remove credentials and anything else private from what you paste here. Report security vulnerabilities privately instead, as [SECURITY.md](https://github.com/DonQuinleone/octodns-views/blob/master/SECURITY.md) describes.
+  - type: input
+    id: version
+    attributes:
+      label: octodns-views version
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: input
+    id: octodns-version
+    attributes:
+      label: octoDNS version
+      placeholder: 1.22.0
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installed from
+      options:
+        - PyPI
+        - Source
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you ran, and what it did.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: The processor block and the records involved, from your octoDNS config.
+      render: yaml
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output
+      description: The octoDNS output around the problem, including any traceback.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: I've removed API tokens and other private details from this report
+          required: true
