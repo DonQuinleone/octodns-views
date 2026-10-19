@@ -1,0 +1,174 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      dist-version: ${{ steps.version.outputs.dist-version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+      - name: Check the tag is on master
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+            echo "::error::Tag $TAG points at a commit that is not on master; only merged work is released"
+            exit 1
+          fi
+      - id: version
+        name: Check the tag matches the package version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="$(grep "^__version__" octodns_views/__init__.py | sed -e "s/.* = '//" -e "s/'$//")"
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::Tag $TAG does not match __version__ $version; bump the version before tagging"
+            exit 1
+          fi
+          python -m pip install --quiet --constraint requirements.txt packaging
+          dist_version="$(python -c "import sys; from packaging.version import Version; print(Version(sys.argv[1]))" "$version")"
+          prerelease="$(python -c "import sys; from packaging.version import Version; print(str(Version(sys.argv[1]).is_prerelease).lower())" "$version")"
+          {
+            echo "version=$version"
+            echo "dist-version=$dist_version"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+      - name: Lint, format and coverage
+        run: ./script/cibuild
+      - name: Build the package and test the installed wheel
+        run: ./script/cibuild-package
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/octodns-views/${{ needs.build.outputs.dist-version }}/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+
+  github-release:
+    needs: [build, pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.build.outputs.version }}
+          PRERELEASE: ${{ needs.build.outputs.prerelease }}
+        run: |
+          awk -v header="## $VERSION " 'index($0, header) == 1 { found = 1; next } /^## / { if (found) exit } found' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::CHANGELOG.md has no section for $VERSION; run changelet bump before tagging"
+            exit 1
+          fi
+          flags=(--verify-tag --title "$VERSION" --notes-file notes.md)
+          if [ "$PRERELEASE" = true ]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$TAG" "${flags[@]}" dist/*
+
+  readme-pins:
+    needs: [build, github-release]
+    if: needs.build.outputs.prerelease == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: master
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+      - name: Update the README pins
+        env:
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          octodns_version="$(curl -fsSL https://pypi.org/pypi/octodns/json | python -c 'import json, sys; print(json.load(sys.stdin)["info"]["version"])')"
+          octodns_sha="$(git ls-remote https://github.com/octodns/octodns.git "refs/tags/v$octodns_version^{}" | cut -f1)"
+          if [ -z "$octodns_sha" ]; then
+            octodns_sha="$(git ls-remote https://github.com/octodns/octodns.git "refs/tags/v$octodns_version" | cut -f1)"
+          fi
+          sha="$(git rev-parse "$TAG^{commit}")"
+          ./script/update-readme-pins \
+            --octodns-version "$octodns_version" --octodns-sha "$octodns_sha" \
+            --version "$VERSION" --sha "$sha"
+      - name: Open a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          if git diff --quiet; then
+            echo "README pins are already current"
+            exit 0
+          fi
+          branch="readme-pins-$VERSION"
+          title="docs(readme): pin octodns-views $VERSION"
+          entry=".changelog/$(python -c 'import uuid; print(uuid.uuid4().hex)').md"
+          mkdir -p .changelog
+          printf -- '---\ntype: none\n---\nPin the README examples to %s\n' "$VERSION" > "$entry"
+          base="$(git rev-parse HEAD)"
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/heads/$branch" -f sha="$base" > /dev/null
+          # Commits made through the API with the workflow token are signed by
+          # GitHub, which the signed-commits rule on master requires
+          python - "$branch" "$base" "$title" README.md "$entry" > commit.json <<'PAYLOAD'
+          import base64, json, os, sys
+          branch, base, title, *paths = sys.argv[1:]
+          additions = [
+              {'path': path, 'contents': base64.b64encode(open(path, 'rb').read()).decode()}
+              for path in paths
+          ]
+          print(json.dumps({
+              'query': 'mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }',
+              'variables': {'input': {
+                  'branch': {'repositoryNameWithOwner': os.environ['GITHUB_REPOSITORY'], 'branchName': branch},
+                  'expectedHeadOid': base,
+                  'message': {'headline': title},
+                  'fileChanges': {'additions': additions},
+              }},
+          }))
+          PAYLOAD
+          gh api graphql --input commit.json > /dev/null
+          gh pr create --base master --head "$branch" --title "$title" \
+            --body "Updates the version and commit pins in README.md after the $VERSION release."

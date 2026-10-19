@@ -1,0 +1,16 @@
+name: Feature request
+description: A setting or behaviour octodns-views doesn't have yet
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you're trying to do
+      description: The problem, rather than a solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would help
+      description: How you'd like octodns-views to handle it, with an example octoDNS config if it helps.

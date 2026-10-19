@@ -1,0 +1,29 @@
+#!/bin/sh
+set -e
+
+cd "$(dirname "$0")/.."
+
+VERSION="$(grep "^__version__" "./octodns_views/__init__.py" | sed -e "s/.* = '//" -e "s/'$//")"
+
+echo "## create test venv ############################################################"
+TMP_DIR=$(mktemp -d -t ci-XXXXXXXXXX)
+python3 -m venv $TMP_DIR
+. "$TMP_DIR/bin/activate"
+pip install --constraint requirements.txt build setuptools
+# Pre-release versions such as 1.0.0-rc.1 are written as 1.0.0rc1 in the wheel name
+DIST_VERSION="$(python -c "import sys; from packaging.version import Version; print(Version(sys.argv[1]))" "$VERSION")"
+echo "## environment & versions ######################################################"
+python --version
+pip --version
+echo "## validate package build #######################################################"
+python -m build --sdist --wheel
+echo "## validate wheel install ###################################################"
+pip install --constraint requirements.txt dist/*$DIST_VERSION*.whl
+echo "## validate tests can run against installed code ###############################"
+# filename needs to resolved independently as pip requires quoting and doesn't support
+# wildcards when installing extra requirements
+# (see: https://pip.pypa.io/en/stable/user_guide/#installing-from-wheels)
+wheel_file=$(ls dist/*$DIST_VERSION*.whl)
+pip install --constraint requirements.txt "${wheel_file}[test]"
+pytest --disable-network
+echo "## complete ####################################################################"

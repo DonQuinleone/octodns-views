@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# Get current script path
+SCRIPT_PATH="$( dirname -- "$( readlink -f -- "${0}"; )"; )"
+# Activate OctoDNS Python venv
+source "${SCRIPT_PATH}/common.sh"
+
+set -o pipefail
+
+VERSION="$(grep "^__version__" "octodns_views/__init__.py" | sed -e "s/.* = '//" -e "s/'$//")"
+
+git fetch --quiet origin master
+if [ -n "$(git status --porcelain)" ]; then
+    echo "Refusing to release: the working tree has uncommitted changes" >&2
+    exit 1
+fi
+if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/master)" ]; then
+    echo "Refusing to release: HEAD is not origin/master; check out an up-to-date master" >&2
+    exit 1
+fi
+
+# Pushing the tag starts .github/workflows/release.yml, which builds, tests
+# and publishes to PyPI and GitHub releases
+git tag -s "v$VERSION" -m "Release $VERSION"
+git push origin "v$VERSION"
+echo "Tagged and pushed v$VERSION; the release workflow publishes it"
