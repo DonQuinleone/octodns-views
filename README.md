@@ -33,6 +33,11 @@ octodns-views==0.1.0
 -e git+https://git@github.com/DonQuinleone/octodns-views.git@2eced80d69eac9cfe82b46d8ab3355f4ceb52131#egg=octodns_views
 ```
 
+### Documentation
+
+- [Quick reference](docs/quick-reference.md): config, override syntax, errors and limits on one page
+- [Split-horizon DNS with Katapult and PowerDNS](docs/split-horizon-katapult-powerdns.md): a worked setup, from config to checking the answers
+
 ### Configuration
 
 Map each view to the ids of the targets that serve it, and add the processor to the zones that use views:
@@ -57,20 +62,20 @@ Give a record an override for a view under `octodns.views`:
 
 ```yaml
 app:
-  type: CNAME
-  value: edge.example.net.
   octodns:
     views:
       inside:
         type: A
         value: 192.0.2.5
+  type: CNAME
+  value: edge.example.net.
 www:
-  type: A
-  value: 198.51.100.1
   octodns:
     views:
       inside:
         value: 192.0.2.1
+  type: A
+  value: 198.51.100.1
 ```
 
 `public-dns` gets `app` as a CNAME and `www` as `198.51.100.1`. `internal-dns` gets `app` as an A record for `192.0.2.5`, and `www` as `192.0.2.1`.
@@ -87,10 +92,10 @@ For a name that exists in only one view, use octoDNS's built-in `included` or `e
 
 ```yaml
 dashboard:
-  type: A
-  value: 192.0.2.7
   octodns:
     included: [internal-dns]
+  type: A
+  value: 192.0.2.7
 ```
 
 #### Validation

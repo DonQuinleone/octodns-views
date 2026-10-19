@@ -1,0 +1,29 @@
+---
+providers:
+  config:
+    class: octodns.provider.yaml.YamlProvider
+    directory: ./zones
+    default_ttl: 3600
+    enforce_order: true
+    escaped_semicolons: false
+  katapult:
+    class: octodns_katapult.KatapultProvider
+    token: env/KATAPULT_API_TOKEN
+    organization: env/KATAPULT_ORG
+  powerdns:
+    class: octodns_powerdns.PowerDnsProvider
+    host: 192.0.2.53
+    port: 8081
+    api_key: env/POWERDNS_API_KEY
+
+processors:
+  views:
+    class: octodns_views.Views
+    views:
+      inside: [powerdns]
+
+zones:
+  example.com.:
+    sources: [config]
+    processors: [views]
+    targets: [katapult, powerdns]
